@@ -1,0 +1,1 @@
+{"Problem Generator": {"completion_tokens": 5986, "prompt_tokens": 6063, "total_tokens": 12049, "invocations": 14}, "Solver": {"completion_tokens": 6934, "prompt_tokens": 5942, "total_tokens": 12876, "invocations": 13}, "Verifier": {"completion_tokens": 6701, "prompt_tokens": 13339, "total_tokens": 20040, "invocations": 12}}
