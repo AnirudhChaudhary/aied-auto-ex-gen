@@ -19,14 +19,16 @@ class Pipeline:
         self.solver_agent = None
         self.verifier_agent = None
 
-    def set_agents(self, problem_agent, solver_agent, verifier_agent):
+    def set_agents(self, problem_agent, solver_agent, verifier_agent, breaker_agent, comprehendor_agent, eval_agent):
         self.problem_agent = problem_agent
         self.solver_agent = solver_agent
         self.verifier_agent = verifier_agent
+        self.breaker_agent = breaker_agent
+        self.comprehendor_agent = comprehendor_agent
+        self.eval_agent = eval_agent    
 
-    def run(self, summary, prev_prob):
-        print("-------------------------")
-        first_problem = True
+    def run(self,prev_prob):
+        print("------------------------- RUNNING PIPELINE ---------------------------")
         for _ in range(self.iters):
             # if first_problem:
             #     problem = self.problem_agent.generate_problem(summary, "")
@@ -37,12 +39,42 @@ class Pipeline:
             #     print("Generated Problem: ", problem)
 
             # these should all return strings
-            problem = self.problem_agent.generate_problem(summary, prev_prob)
-            print("---------------------------------------------------")
-            solution = self.solver_agent.solve(problem)
+            print("-------------------------GENERATING PROBLEM---------------------------")
+            instruction="Be concise and specific. What concepts is this problem trying to test?"
+            raw_question_concepts = self.comprehendor_agent.call(message=prev_prob, system_instruction=instruction)
+            question_concepts = Agent.parse_output(raw_question_concepts)
+
+            print("Question Concepts: ", question_concepts)
+
+            difficulty = "same"
+            instruction="You are a computer science professor that is trying to create a new midterm problem. There are multiple ways to change a problem that affect its' difficulty. For example, changing variable name and function names keep the problem at the same difficulty. You can make a problem easier by providing more information. You can make a problem harder by changing the constants, reversing the polarity of the question, or changing a data type. "
+            prompt=f"Generate and return another problem of {difficulty} difficulty as the following problem without any greetings: "
+            raw_problem = self.breaker_agent.call(message=prev_prob, system_instruction=instruction, llm_prompt=prompt)
+            problem = Agent.parse_output(raw_problem)
+            print("Tweaked Problem: ", problem)
+
+            instruction="You are a question evaluator. You will be given the concepts the question should test and a question. You will analyze the concepts and you will evaluate if the question still tests the concepts."
+            prompt = f"Concepts: {question_concepts}\nQuestion: {problem}"
+            feedback = self.eval_agent.call(message=prev_prob, system_instruction=instruction, llm_prompt=prompt)
+            feedback = Agent.parse_output(feedback)
+            print("Feedback: ", feedback)
+
+            print("-------------------------SOLVING PROBLEM---------------------------")
+            instruction = "You are an expert solver. You look at the questions, think about the correct solution, and return only the solution to the questions without the explanations."
+            prompt = "Answer the following question: "
+            solution = self.solver_agent.call(message=problem, system_instruction=instruction, llm_prompt=prompt)
             print("Generated Solution: ", solution)
-            print("---------------------------------------------------")
-            is_correct, feedback = self.verifier_agent.verify(problem, solution)
+
+            print("-------- VERIFYING PROBLEM ------------")
+            prompt = "You are an expert verifier. You look at the questions and check whether or not the solution is correct."
+            instruction = "Verify that the solutions answer the problem. "
+            problem_solution_message = f"\nProblem: {problem}\nSolution: {solution}"
+
+            verification = self.verifier_agent.call(message=problem_solution_message, system_instruction=instruction, llm_prompt=prompt)
+            verification = Agent.parse_output(verification)
+            # Parse the verification result (expected to be in format "correct/incorrect")
+            is_correct = "correct" in verification.lower()
+            feedback = verification if not is_correct else None
             print(f"correct: {is_correct} feedback: {feedback}")
             print("---------------------------------------------------")
             if not is_correct:
@@ -58,15 +90,14 @@ class Pipeline:
         print("final generated problem: ", problem)
 
 class Agent:
-    def __init__(self, name="", instruction="", prompt="You are a teacher, teaching a course on Python.", model_name="gpt-4o"):
+    def __init__(self, name="", sys_instruction="", llm_prompt="You are a teacher, teaching a course on Python.", model_name="gpt-4o"):
         self.name = name
-        self.instruction = instruction
-        self.prompt = prompt  
+        self.sys_instruction = sys_instruction
+        self.prompt = llm_prompt  
         self.model_name = model_name
-        # self.model = OpenAI(
-            #set key here
-        # )
-    def call(self, message, prompt="", instruction="", tool_choice=False, tools={}):
+        self.model = OpenAI()
+
+    def call(self, message, system_instruction="", llm_prompt="", tool_choice=False, tools={}):
         """
         Makes the actual call to gpt with the problem prompt and later, if we want tool_choice and tools.
         Input:
@@ -79,17 +110,17 @@ class Agent:
         Output:
         - ChatCompletion() [ Essentially a dictionary ]
         """
-        assert type(message) == str, "message should be a string, it is not"
-        if prompt == "":
-            prompt = self.prompt
+        assert type(message) == str, f"message should be a string, it is of type {type(message)}"
+        if system_instruction == "":
+            system_instruction = self.sys_instruction
 
-        print("-------- CALLING GPT with the following params ----------")
-        print("[SYSTEM]: ", prompt)
-        print("[USER]: ", instruction + message)
+        print("-------- CALLING GPT ----------")
+        print("[SYSTEM]: ", system_instruction)
+        print("[USER]: ", llm_prompt + message)
 
         message_to_send =[
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": instruction + message}
+            {"role": "system", "content": system_instruction},
+            {"role": "user", "content": llm_prompt + message}
         ]
         response = self.model.chat.completions.create(
             model=self.model_name,
@@ -150,31 +181,34 @@ class Agent:
         
         return
 
-    def parse_output(self, response, content=True, function_call=False):
+    def parse_output(response, content=True, function_call=False):
         """
         Parses the output
         """
         if type(response) == str:
             print("response is a string? : ", response)
             return response
+        
+        # print("type of response: ", type(response))
+        if "choices" not in response:
+            print("response does not have choices. It looks like this: ", response)
         return response.choices[0].message.content
 
 
-    def generate_problem(self, summary, prev_prob):
-        # Implement logic to generate a problem using the summary
-        # problem_prompt = f"{self.prompt} Generate a practice problem from the following summary: {summary}"
+    # def generate_problem(self,prev_prob):
+    #     # Implement logic to generate a problem using the summary
+    #     # problem_prompt = f"{self.prompt} Generate a practice problem from the following summary: {summary}"
         
-        print("-------- GENERATING PROBLEM ------------")
-        base_prompt = f"Generate a practice problem from the following summary: {summary}. The problem should be standalone, allowing me to directly input it into a test. "
-        if prev_prob:
-            prompt = base_prompt + f"Attached are also some examples of problems that have been used in this section. Please consider the structure of these problems, but do not copy them exactly! {prev_prob}"
-            message = ""    # little jank, but everything is sent as part of the prompt
-        else:
-            prompt=base_prompt
-            message = summary
-        problem = self.call(message, instruction=prompt)
-        problem = self.parse_output(problem)
-        return problem
+    #     print("-------- GENERATING PROBLEM ------------")
+    #     if prev_prob:
+    #         prompt = base_prompt + f"Attached are also some examples of problems that have been used in this section. Please consider the structure of these problems, but do not copy them exactly! {prev_prob}"
+    #         message = ""    # little jank, but everything is sent as part of the prompt
+    #     else:
+    #         prompt=base_prompt
+    #         message = summary
+    #     problem = self.call(message, instruction=prompt)
+    #     problem = self.parse_output(problem)
+    #     return problem
 
     def solve(self, problem):
         # Implement logic to solve the problem
@@ -183,7 +217,7 @@ class Agent:
         prompt = "You are an expert solver. You look at the questions, think about the correct solution, and return only the solution to the questions without the explanations."
         instruction = "Answer the following questions: "
         message = problem
-        solution = self.call(message=message, prompt=prompt, instruction=instruction)
+        solution = self.call(message=message, llm_prompt=prompt, system_instruction=instruction)
         solution = self.parse_output(solution)
         return solution
 
@@ -195,7 +229,7 @@ class Agent:
         prompt = "You are an expert verifier. You look at the questions and check whether or not the solution is correct."
         instruction = "Verify that the solutions answer the problem. "
         message = problem_solution_message
-        verification = self.call(message=message, prompt=prompt, instruction=instruction)
+        verification = self.call(message=message, llm_prompt=prompt, system_instruction=instruction)
         verification = self.parse_output(verification)
         # Parse the verification result (expected to be in format "correct/incorrect")
         is_correct = "correct" in verification.lower()
@@ -209,37 +243,18 @@ class Agent:
         self.prompt += f" Consider the feedback: {feedback}"
 
 # Create the problem generator, solver, and verifier agents
-problem_agent = Agent(name="Problem Generator", instruction="Generate a practice problem from the following summary.", model_name="gpt-4o")
-print("Problem Generator Agent Created")
-solver_agent = Agent(name="Solver", instruction="Solve the following problem.", model_name="gpt-4o")
-print("Solver Agent Created")
-verifier_agent = Agent(name="Verifier", instruction="Verify if the solution is correct for the problem.", model_name="gpt-4o")
-print("Verifier Agent Created")
+problem_agent = Agent(name="Problem Generator", sys_instruction="Generate a practice problem from the following summary.", model_name="gpt-4o")
+solver_agent = Agent(name="Solver", sys_instruction="Solve the following problem.", model_name="gpt-4o")
+verifier_agent = Agent(name="Verifier", sys_instruction="Verify if the solution is correct for the problem.", model_name="gpt-4o")
+comprehendor_agent = Agent(name="Comprehendor", model_name="gpt-4o")
+breaker_agent = Agent(name="Breaker", model_name="gpt-4o")
+eval_agent = Agent(name="Question Evaluator", model_name="gpt-4o")
 
 # Create the pipeline and set the agents
-pipeline = Pipeline(iters=2, blocks=[])
-pipeline.set_agents(problem_agent, solver_agent, verifier_agent)
+pipeline = Pipeline(iters=1, blocks=[])
+pipeline.set_agents(problem_agent, solver_agent, verifier_agent, comprehendor_agent, breaker_agent, eval_agent)
 
 # Define the summary of the chapters
-summary = """Higher-order functions: Passing functions as arguments enhances expressiveness but can clutter the global frame with many unique function names and requires specific argument signatures.
-
-Nested function definitions: Defining functions within other functions addresses issues with name collisions and argument compatibility, as these local functions are only accessible during the enclosing function's execution. Local definitions are evaluated only when the enclosing function is called.
-
-Lexical scoping:
-
-Inner functions can access names defined in their enclosing scope.
-Functions share the enclosing environment's names rather than the calling environment’s.
-Environment model extensions:
-
-User-defined functions now include a "parent environment" annotation, indicating where they were defined.
-Nested function calls create extended environments with chains of frames that can be arbitrarily long, ending at the global frame.
-Frame resolution: When evaluating a nested function, Python resolves variable names by searching through the chain of frames, starting from the current frame and moving up to the parent frames.
-
-Advantages of lexical scoping:
-
-Local function names do not interfere with external names.
-Inner functions can access variables from the enclosing environment.
-Closures: Functions defined within other functions retain access to the data from their defining environment, effectively "enclosing" this data."""
 
 previous_problems = """def curried_pow(x):
         def h(y):
@@ -250,4 +265,4 @@ previous_problems = """def curried_pow(x):
 # Run the pipeline
 print("running the pipeline")
 
-pipeline.run(summary, previous_problems)
+pipeline.run(previous_problems)
