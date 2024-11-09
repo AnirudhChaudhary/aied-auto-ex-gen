@@ -2,14 +2,9 @@
 # from agent import Pipeline, Agent
 
 # Set up the Azure OpenAI service
-api_key = "895cedddf4a348c3b78f2ad9f7807766"
-api_version = "2023-12-01-preview"
-azure_endpoint = "https://61a-bot-canada.openai.azure.com"
-deployment_name = '61a-bot-prod-gpt4'
 import os
 import json
 from openai import OpenAI
-from llama_index.llms.azure_openai import AzureOpenAI
 
 class Pipeline:
     def __init__(self, iters, blocks):
@@ -28,16 +23,8 @@ class Pipeline:
         self.eval_agent = eval_agent    
 
     def run(self,prev_prob):
-        print("------------------------- RUNNING PIPELINE ---------------------------")
+        print(f"------------------------- RUNNING PIPELINE FOR {self.iters} ITERATIONS -----------------------------")
         for _ in range(self.iters):
-            # if first_problem:
-            #     problem = self.problem_agent.generate_problem(summary, "")
-            #     first_problem = False
-            #     print("First Generated Problem: ", problem)
-            # else:
-            #     problem = self.problem_agent.generate_problem(summary, prev_prob)
-            #     print("Generated Problem: ", problem)
-
             # these should all return strings
             print("-------------------------GENERATING PROBLEM---------------------------")
             instruction="Be concise and specific. What concepts is this problem trying to test?"
@@ -47,13 +34,13 @@ class Pipeline:
             print("Question Concepts: ", question_concepts)
 
             difficulty = "same"
-            instruction="You are a computer science professor that is trying to create a new midterm problem. There are multiple ways to change a problem that affect its' difficulty. For example, changing variable name and function names keep the problem at the same difficulty. You can make a problem easier by providing more information. You can make a problem harder by changing the constants, reversing the polarity of the question, or changing a data type. "
+            instruction="You are a computer science professor that is trying to create a new midterm problem. There are multiple ways to change a problem, including changing variable names, changing function names, changing the constants, reversing the polarity of the question, or changing a data type. "
             prompt=f"Generate and return another problem of {difficulty} difficulty as the following problem without any greetings: "
             raw_problem = self.breaker_agent.call(message=prev_prob, system_instruction=instruction, llm_prompt=prompt)
             problem = Agent.parse_output(raw_problem)
             print("Tweaked Problem: ", problem)
 
-            instruction="You are a question evaluator. You will be given the concepts the question should test and a question. You will analyze the concepts and you will evaluate if the question still tests the concepts."
+            instruction="You are a question evaluator. You will be given the concepts the question should test and a question. You will analyze the concepts and you will evaluate if the question still tests the concepts. Return yes or no. If no, explain what is missing from the question."
             prompt = f"Concepts: {question_concepts}\nQuestion: {problem}"
             feedback = self.eval_agent.call(message=prev_prob, system_instruction=instruction, llm_prompt=prompt)
             feedback = Agent.parse_output(feedback)
@@ -80,14 +67,15 @@ class Pipeline:
             if not is_correct:
                 # Provide feedback to problem generator
                 print(f"Solution was incorrect. Feedback: {feedback}")
-                self.problem_agent.update_with_feedback(feedback)
-                prev_prob = problem
+                # self.problem_agent.update_with_feedback(feedback)
+                # prev_prob = problem
 
             else:
                 print(f"Solution was correct: {solution}")
                 break  # Exit early if solution is correct
-        print("---------------------------------------------------")
-        print("final generated problem: ", problem)
+        # print("---------------------------------------------------")
+        # print("final generated problem: ", problem)
+        return problem
 
 class Agent:
     def __init__(self, name="", sys_instruction="", llm_prompt="You are a teacher, teaching a course on Python.", model_name="gpt-4o"):
@@ -194,54 +182,6 @@ class Agent:
             print("response does not have choices. It looks like this: ", response)
         return response.choices[0].message.content
 
-
-    # def generate_problem(self,prev_prob):
-    #     # Implement logic to generate a problem using the summary
-    #     # problem_prompt = f"{self.prompt} Generate a practice problem from the following summary: {summary}"
-        
-    #     print("-------- GENERATING PROBLEM ------------")
-    #     if prev_prob:
-    #         prompt = base_prompt + f"Attached are also some examples of problems that have been used in this section. Please consider the structure of these problems, but do not copy them exactly! {prev_prob}"
-    #         message = ""    # little jank, but everything is sent as part of the prompt
-    #     else:
-    #         prompt=base_prompt
-    #         message = summary
-    #     problem = self.call(message, instruction=prompt)
-    #     problem = self.parse_output(problem)
-    #     return problem
-
-    def solve(self, problem):
-        # Implement logic to solve the problem
-        # solve_prompt = f"{self.prompt} Solve the following problem: {problem}"
-        print("-------- SOLVING PROBLEM ------------")
-        prompt = "You are an expert solver. You look at the questions, think about the correct solution, and return only the solution to the questions without the explanations."
-        instruction = "Answer the following questions: "
-        message = problem
-        solution = self.call(message=message, llm_prompt=prompt, system_instruction=instruction)
-        solution = self.parse_output(solution)
-        return solution
-
-    def verify(self, problem, solution):
-        # Implement logic to verify the solution
-        # verify_prompt = f"{self.prompt} Verify if the solution is correct for the problem:\nProblem: {problem}\nSolution: {solution}"
-        print("-------- VERIFYING PROBLEM ------------")
-        problem_solution_message = f"\nProblem: {problem}\nSolution: {solution}"
-        prompt = "You are an expert verifier. You look at the questions and check whether or not the solution is correct."
-        instruction = "Verify that the solutions answer the problem. "
-        message = problem_solution_message
-        verification = self.call(message=message, llm_prompt=prompt, system_instruction=instruction)
-        verification = self.parse_output(verification)
-        # Parse the verification result (expected to be in format "correct/incorrect")
-        is_correct = "correct" in verification.lower()
-        feedback = verification if not is_correct else None
-        return is_correct, feedback
-
-    def update_with_feedback(self, feedback):
-        # Logic to incorporate feedback into the model (fine-tuning prompt or other adjustments)
-        print(f"Updating with feedback: {feedback}")
-        # Example: adjusting prompt based on feedback
-        self.prompt += f" Consider the feedback: {feedback}"
-
 # Create the problem generator, solver, and verifier agents
 problem_agent = Agent(name="Problem Generator", sys_instruction="Generate a practice problem from the following summary.", model_name="gpt-4o")
 solver_agent = Agent(name="Solver", sys_instruction="Solve the following problem.", model_name="gpt-4o")
@@ -265,4 +205,7 @@ previous_problems = """def curried_pow(x):
 # Run the pipeline
 print("running the pipeline")
 
-pipeline.run(previous_problems)
+new_problem = pipeline.run(previous_problems)
+
+print("----------- NEW GENERATED PROBLEM --------------")
+print(new_problem)
