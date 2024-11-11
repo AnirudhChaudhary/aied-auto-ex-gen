@@ -1,0 +1,59 @@
+The extract_words function takes a string text and a list of unique non-negative integers indices that are all less than the number of words in text. It removes the word at each index in indices from the text and returns a list of those words in the order they appeared in text (not the order they appeared in indices).
+
+Fill in each blank with one of these names: list, map, filter, reverse, reversed, sort, sorted, append, insert, index, remove, pop, zip, or sum.
+
+def extract_words(text, indices):
+    '''Remove and return the words at indices from text.
+
+    >>> text = 'The quick brown fox jumps over the lazy dog'
+    >>> extract_words(text, [3, 1, 5])
+    ['quick', 'fox', 'over']
+    >>> text
+    'The brown jumps the lazy dog'
+    '''
+    words = text.split()
+    return _____(_____( [words._____(i) for i in _____(_____(indices))] ))
+
+Fill in each blank with one of these names: list, map, filter, reverse, reversed, sort, sorted, append, insert, index, remove, pop, zip, or sum.
+
+def collect(cards, indices):
+    '''Remove and return the items at indices from cards.
+
+    >>> cards = [8, 'A', 'B', 5, 3, 'D']
+    >>> collect(cards, [3, 0, 2])
+    [8, 'B', 5]
+    >>> cards
+    ['A', 3, 'D']
+    '''
+    return _____(_____( [cards._____(j) for j in _____(_____(indices))] ))
+
+Complete the function remove_at_positions. The function takes a list of strings hand and a list positions containing unique non-negative integers that are all less than the length of hand. It removes the elements at each index specified in positions from hand and returns a list of those removed elements in the order they appeared in the original list hand.
+
+Fill in each blank with one of these names: list, map, filter, reverse, reversed, sort, sorted, append, insert, index, remove, pop, zip, or sum.
+
+def remove_at_positions(hand, positions):
+    '''Remove and return the elements at positions from hand.
+
+    >>> hand = ['A', 'B', 'C', 'D', 'E']
+    >>> remove_at_positions(hand, [3, 0, 1])
+    ['A', 'B', 'D']
+    >>> hand
+    ['C', 'E']
+    '''
+    return _____(_____( [hand._____(pos) for pos in _____(_____(positions))] ))
+
+
+The draw function takes a list hand and a list of unique non-negative integers positions that are all less than the length of hand. It removes hand[p] for each p in positions and returns a list of those elements in the order they appeared in hand (not the order they appeared in positions).
+
+Fill in each blank with one of these names: list, map, filter, reverse, reversed, sort, sorted, append, insert, index, remove, pop, zip, or sum.
+
+def draw(hand, positions):
+    '''Remove and return the items at positions from hand.
+
+    >>> hand = ['A', 'K', 'Q', 'J', 10, 9]
+    >>> draw(hand, [2, 1, 4])
+    ['K', 'Q', 10]
+    >>> hand
+    ['A', 'J', 9]
+    '''
+    return _____(_____( [hand._____(i) for i in _____(_____(positions))] ))

@@ -1,0 +1,54 @@
+Implement `group-three`, which takes a list `t`. It returns a list of lists that contain the elements of `t` in order. Each sublist should have 3 elements except the last one, which may contain between 1 and 3 elements.
+
+;;; Return a list of groups containing elements of `t`.
+;;;
+;;; scm> (group-three '(7 8 9 10 11 12))
+;;; ((7 8 9) (10 11 12))
+;;; scm> (group-three '(7 8 9 10 11 12 13 14))
+;;; ((7 8 9) (10 11 12) (13 14))
+(define (group-three t)
+    (if (<= (length t) 3)
+        'YOUR-CODE-HERE
+    ))
+
+(expect (group-three '(7 8 9 10 11 12)) ((7 8 9) (10 11 12)) )
+(expect (group-three '(7 8 9 10 11 12 13 14)) ((7 8 9) (10 11 12) (13 14)) )
+
+---
+
+Create a function called `triple-group` that takes a list `lst`. It should return a new list containing sublists where each sublist includes 3 elements from `lst`. The last sublist can contain between 2 to 4 elements to accommodate the leftover items if the total number of elements isn't perfectly divisible by 3.
+
+;;; Return a list of triplets containing the elements of `lst`.
+;;;
+;;; scm> (triple-group '(1 2 3 4 5 6 7))
+;;; ((1 2 3) (4 5 6) (7))
+;;; scm> (triple-group '(1 2 3 4 5 6 7 8 9))
+;;; ((1 2 3) (4 5 6) (7 8 9))
+;;; scm> (triple-group '(1 2 3 4 5 6 7 8 9 10 11))
+;;; ((1 2 3) (4 5 6) (7 8 9) (10 11))
+(define (triple-group lst)
+    (if (<= (length lst) 4)
+        'YOUR-CODE-HERE
+    ))
+
+(expect (triple-group '(1 2 3 4 5 6 7)) ((1 2 3) (4 5 6) (7)) )
+(expect (triple-group '(1 2 3 4 5 6 7 8 9)) ((1 2 3) (4 5 6) (7 8 9)) )
+(expect (triple-group '(1 2 3 4 5 6 7 8 9 10 11)) ((1 2 3) (4 5 6) (7 8 9) (10 11)) )
+
+---
+
+Implement `group-elements`, which takes a list `t`. It returns a list of lists that together include all the elements of `t` sequentially. Each sublist should contain 3 elements, except possibly the last sublist, which can have up to 4 elements.
+
+;;; Return a list of triples containing the elements of `t`.
+;;;
+;;; scm> (group-elements '(1 2 3 4 5 6 7 8 9))
+;;; ((1 2 3) (4 5 6) (7 8 9))
+;;; scm> (group-elements '(1 2 3 4 5 6 7 8 9 10))
+;;; ((1 2 3) (4 5 6) (7 8 9 10))
+(define (group-elements t)
+    (if (<= (length t) 4)
+        'YOUR-CODE-HERE
+    ))
+
+(expect (group-elements '(1 2 3 4 5 6 7 8 9)) ((1 2 3) (4 5 6) (7 8 9)) )
+(expect (group-elements '(1 2 3 4 5 6 7 8 9 10)) ((1 2 3) (4 5 6) (7 8 9 10)) )

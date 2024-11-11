@@ -1,0 +1,47 @@
+Implement `common_elements`, which takes two arrays of strings, `x` and `y`, sorted in lexicographical order and with no duplicate strings within each array. It returns a list of strings that appear in both arrays without changing the order or altering the original arrays.
+
+def common_elements(x, y):
+    '''For lexicographically sorted x and y, find the strings that appear in both.
+
+    >>> x = ['apple', 'banana', 'cherry', 'date']
+    >>> y = ['banana', 'elephant', 'fig', 'cherry']
+    >>> common_elements(x, y)  # 'banana' and 'cherry'
+    ['banana', 'cherry']
+    >>> common_elements(['avocado', 'grape'], ['grape', 'kiwi', 'lemon'])
+    ['grape']
+    >>> common_elements(['mango', 'nectarine'], ['peach', 'plum'])
+    []
+    '''
+    "*** YOUR CODE HERE ***"
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Implement shared_elements, which takes two linked lists of strings called list1 and list2 that are sorted in lexicographic order and have no repeated elements within each list. It returns the count of how many strings appear in both lists.
+
+def shared_elements(list1, list2):
+    '''For lexicographically sorted list1 and list2, count the strings that appear in both.
+
+    >>> list_a = Link('alpha', Link('beta', Link('delta', Link('epsilon', Link('gamma')))))
+    >>> list_b = Link('alpha', Link('beta', Link('zeta', Link('eta', Link('theta')))))
+    >>> shared_elements(list_a, list_b)  # 'alpha' and 'beta'
+    2
+    >>> shared_elements(list_a.rest, list_b.rest)  # no common strings
+    0
+    >>> shared_elements(Link('aardvark', list_a), Link('aardvark', list_b))
+    3
+    '''
+    "*** YOUR CODE HERE ***"
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------    
+Implement overlap, which takes two linked lists of numbers called s and t that are sorted in increasing order and have no repeated elements within each list. It returns the count of how many numbers appear in both lists.
+
+def overlap(s, t):
+    '''For increasing s and t, count the numbers that appear in both.
+
+    >>> a = Link(3, Link(4, Link(6, Link(7, Link(9, Link(10))))))
+    >>> b = Link(1, Link(3, Link(5, Link(7, Link(8)))))
+    >>> overlap(a, b)  # 3 and 7
+    2
+    >>> overlap(a.rest, b)  # just 7
+    1
+    >>> overlap(Link(0, a), Link(0, b))
+    3
+    '''
+    "*** YOUR CODE HERE ***"

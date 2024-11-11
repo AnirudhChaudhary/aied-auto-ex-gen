@@ -50,6 +50,7 @@ class Pipeline:
             instruction = "You are an expert solver. You look at the questions, think about the correct solution, and return only the solution to the questions without the explanations."
             prompt = "Answer the following question: "
             solution = self.solver_agent.call(message=problem, system_instruction=instruction, llm_prompt=prompt)
+            solution = Agent.parse_output(solution)
             print("Generated Solution: ", solution)
 
             print("-------- VERIFYING PROBLEM ------------")
@@ -173,14 +174,27 @@ class Agent:
         """
         Parses the output
         """
-        if type(response) == str:
-            print("response is a string? : ", response)
-            return response
+        # if type(response) == str:
+        #     print("response is a string? : ", response)
+        #     return response
+
+        try:
+            content = response["choices"][0]["message"]["content"]
+        except:
+            response = str(response)
+            print("response: ", response)
+            # print("response does not have choices. It looks like this: ", response)
+            content_start = response.index('content=')                   # get the start of the content
+            response_first_half_stripped = response[content_start+9:]       # remove everything up until 'content'
+            ending_quote_index = response_first_half_stripped.index("refusal=")  # this is the ending quote, but need to be careful that the index is relative to the content
+            content = response_first_half_stripped[:ending_quote_index-2]    # 9 is the len(content=') and ending quote index comes from the previous part, with the new relative section
+
+        return content
         
         # print("type of response: ", type(response))
-        if "choices" not in response:
-            print("response does not have choices. It looks like this: ", response)
-        return response.choices[0].message.content
+        # if "choices" not in response:
+            
+        # return response.choices[0].message.content
 
 # Create the problem generator, solver, and verifier agents
 problem_agent = Agent(name="Problem Generator", sys_instruction="Generate a practice problem from the following summary.", model_name="gpt-4o")
@@ -196,16 +210,29 @@ pipeline.set_agents(problem_agent, solver_agent, verifier_agent, comprehendor_ag
 
 # Define the summary of the chapters
 
-previous_problems = """def curried_pow(x):
-        def h(y):
-            return pow(x, y)
-        return h
->>> curried_pow(2)(3)"""
+previous_problems = """Implement pair-up, which takes a list s. It returns a list of lists that together contain all of the elements of s in order. Each list in the result should have 2 elements. The last one can have up to 3.
+
+;;; Return a list of pairs containing the elements of s.
+    ;;;
+    ;;; scm> (pair-up '(3 4 5 6 7 8))
+    ;;; ((3 4) (5 6) (7 8))
+    ;;; scm> (pair-up '(3 4 5 6 7 8 9))
+    ;;; ((3 4) (5 6) (7 8 9))
+    (define (pair-up s)
+        (if (<= (length s) 3)
+            'YOUR-CODE-HERE
+        ))
+
+    (expect (pair-up '(3 4 5 6 7 8)) ((3 4) (5 6) (7 8)) )
+    (expect (pair-up '(3 4 5 6 7 8 9)) ((3 4) (5 6) (7 8 9)) )
+
+"""
 
 # Run the pipeline
-print("running the pipeline")
-
+output_file = "output.txt"
 new_problem = pipeline.run(previous_problems)
 
 print("----------- NEW GENERATED PROBLEM --------------")
-print(new_problem)
+with open(output_file, "a") as f:
+    f.write("\n")
+    f.write(new_problem)

@@ -1,0 +1,220 @@
+Create the QuestionMark, ExclamationMark, and Path classes so that invoking their display method conforms to the doctests. Use minimal code and ensure there's no redundant logic from Symbol or Pattern.
+
+class Symbol:
+    '''A generic symbol.
+
+    >>> Symbol().show()
+    '*'
+    >>> print(Symbol('$').show(), Symbol('~').show())
+    $ ~
+    '''
+    def __init__(self, character='*'):
+        self.character = character
+
+    def show(self):
+        return self.character
+
+class Pattern:
+    '''A symbol pattern.
+
+    >>> Pattern().display()
+    ! *!
+    '''
+    def __init__(self):
+        self.sep = '*'
+
+    def next_symbol(self):
+        return Symbol()
+
+    def display(self):
+        first, last = self.next_symbol(), self.next_symbol()
+        print('! ' + first.show() + self.sep + last.show() + '!')
+
+class QuestionMark(Pattern):
+    '''A pattern with two question marks.
+
+    >>> QuestionMark().display()
+    ? ???
+    '''
+    "*** YOUR CODE HERE ***"
+
+class ExclamationMark(Pattern):
+    '''A pattern with an exclamation mark and a question mark.
+
+    >>> ExclamationMark().display()
+    ? !?
+    '''
+    def __init__(self):
+        "*** YOUR CODE HERE ***"
+
+    def next_symbol(self):
+        "*** YOUR CODE HERE ***"
+
+----------------------------------------------------------------------------------------------------------------------------------
+Implement the HappyDuck and SadDuck classes, ensuring that their quack method matches the doctests. Minimize code duplication from the Beak or Duck classes.
+
+class Beak:
+    '''A beak.
+
+    >>> Beak().make_sound()
+    'quack'
+    >>> print(Beak(mood='sad').make_sound(), Beak(mood='happy').make_sound())
+    quack quaaaack
+    '''
+    def __init__(self, mood='neutral'):
+        self.mood = mood
+
+    def make_sound(self):
+        if self.mood == 'happy':
+            return 'quaaaack'
+        elif self.mood == 'sad':
+            return 'quack'
+        else:
+            return 'quack'
+
+class Duck:
+    '''A duck.
+
+    >>> Duck().quack()
+    Quack!
+    '''
+    def __init__(self):
+        self.sound = 'quack'
+
+    def next_beak(self):
+        return Beak()
+
+    def quack(self):
+        print(self.next_beak().make_sound().capitalize() + '!')
+
+class HappyDuck(Duck):
+    '''A duck that quacks loudly when happy.
+
+    >>> HappyDuck().quack()
+    Quaaaack!
+    '''
+    "*** YOUR CODE HERE ***"
+
+class SadDuck(Duck):
+    '''A duck that quacks softly when sad.
+
+    >>> SadDuck().quack()
+    Quack!
+    '''
+    def __init__(self):
+        "*** YOUR CODE HERE ***"
+
+    def next_beak(self):
+        "*** YOUR CODE HERE ***"
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Implement the LoudDuck and QuietDuck classes so that calling their quack method matches the doctests. Use as little code as possible and try not to repeat any logic from Sound or Duck.
+
+class Sound:
+    '''A sound.
+
+    >>> Sound().make()
+    'quack'
+    >>> print(Sound(True).make(), Sound(False).make())
+    QUACK quack
+    '''
+    def __init__(self, loud=False):
+        self.loud = loud
+
+    def make(self):
+        if self.loud:
+            return 'QUACK'
+        else:
+            return 'quack'
+
+class Duck:
+    '''A duck.
+
+    >>> Duck().quack()
+    [quack]
+    '''
+    def __init__(self):
+        self.edge = '['
+
+    def next_sound(self):
+        return Sound()
+
+    def quack(self):
+        sound = self.next_sound()
+        print(self.edge + sound.make() + self.edge[::-1])
+
+class LoudDuck(Duck):
+    '''A duck with a loud sound.
+
+    >>> LoudDuck().quack()
+    [QUACK]
+    '''
+    "*** YOUR CODE HERE ***"
+
+class QuietDuck(Duck):
+    '''A duck with no sound.
+
+    >>> QuietDuck().quack()
+    [silence]
+    '''
+    def __init__(self):
+        "*** YOUR CODE HERE ***"
+
+    def next_sound(self):
+        "*** YOUR CODE HERE ***"
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Implement the SleepyBear and WinkingBear classes so that calling their print method matches the doctests. Use as little code as possible and try not to repeat any logic from Eye or Bear.
+
+class Eye:
+    '''An eye.
+
+    >>> Eye().draw()
+    '0'
+    >>> print(Eye(False).draw(), Eye(True).draw())
+    0 -
+    '''
+    def __init__(self, closed=False):
+        self.closed = closed
+
+    def draw(self):
+        if self.closed:
+            return '-'
+        else:
+            return '0'
+
+class Bear:
+    '''A bear.
+
+    >>> Bear().print()
+    ? 0o0?
+    '''
+    def __init__(self):
+        self.nose_and_mouth = 'o'
+
+    def next_eye(self):
+        return Eye()
+
+    def print(self):
+        left, right = self.next_eye(), self.next_eye()
+        print('? ' + left.draw() + self.nose_and_mouth + right.draw() + '?')
+
+class SleepyBear(Bear):
+    '''A bear with closed eyes.
+
+    >>> SleepyBear().print()
+    ? -o-?
+    '''
+    "*** YOUR CODE HERE ***"
+
+class WinkingBear(Bear):
+    '''A bear whose left eye is different from its right eye.
+
+    >>> WinkingBear().print()
+    ? -o0?
+    '''
+    def __init__(self):
+        "*** YOUR CODE HERE ***"
+
+    def next_eye(self):
+        "*** YOUR CODE HERE ***"

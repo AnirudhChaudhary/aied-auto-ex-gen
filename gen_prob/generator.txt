@@ -1,0 +1,50 @@
+
+Create a generator function called `cumulative_sum` that takes `seq`, a non-empty iterator over numbers. It yields the cumulative sum of the values from `seq` up to each point. If `seq` iterates over a positive finite number of values `n`, then `cumulative_sum` should yield `n` times.
+
+def cumulative_sum(seq):
+    '''Yield the cumulative sum of the values from iterator seq.
+
+    >>> list(cumulative_sum(iter([1, 2, 3, 4])))
+    [1, 3, 6, 10]
+    >>> next(cumulative_sum(iter([5, 10, 15])))
+    5
+    '''
+    "*** YOUR CODE HERE ***"
+
+Implement squared_differences, a generator function that takes sequence, a non-empty list of numbers. It yields the squared differences between each pair of adjacent values from the list. If sequence has a length of n, then squared_differences should yield n-1 times.
+
+def squared_differences(sequence):
+    '''Yield the squared differences between adjacent values from list sequence.
+    
+    >>> list(squared_differences([3, 8, 15]))
+    [25, 49]
+    >>> next(squared_differences([12, 4]))
+    64
+    '''
+    "*** YOUR CODE HERE ***"
+```
+
+Implement differences, a generator function that takes t, a non-empty iterator over numbers. It yields the differences between each pair of adjacent values from t. If t iterates over a positive finite number of values n, then differences should yield n-1 times.\n 
+def differences(t):
+    '''Yield the differences between adjacent values from iterator t.
+
+    >>> list(differences(iter([5, 2, -100, 103])))
+    [-3, -102, 203]
+    >>> next(differences(iter([39, 100])))
+    61
+    '''
+    "*** YOUR CODE HERE ***"
+
+Implement ratios, a generator function that takes t, a non-empty iterator over numbers. It yields the ratios between each pair of adjacent values from t by dividing the latter by the former. If t iterates over a positive finite number of values n, then ratios should yield n-1 times.
+
+```python
+def ratios(t):
+    '''Yield the ratios between adjacent values from iterator t.
+
+    >>> list(ratios(iter([5, 2, -100, 103])))
+    [0.4, -50.0, -1.03]
+    >>> next(ratios(iter([4, 16])))
+    4.0
+    '''
+    "*** YOUR CODE HERE ***"
+```
