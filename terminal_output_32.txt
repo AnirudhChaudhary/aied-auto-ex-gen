@@ -1,0 +1,1 @@
+final lines:  ['assert print( list(cumulative_sums(iter([1, 2, 3, 4]))) == [1, 3, 6, 10])', 'assert print(    >>> next(cumulative_sums(iter([10, 20, 30]))) == 10)']

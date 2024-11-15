@@ -1,0 +1,6 @@
+def cumulative_sum(s):
+    '''Yield the cumulative sum of values from iterator s.'''
+    total = 0
+    for value in s:
+        total += value
+        yield total

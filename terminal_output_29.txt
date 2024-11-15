@@ -1,0 +1,61 @@
+------------------------- RUNNING PIPELINE FOR 2 ITERATIONS -----------------------------
+-------------------------GENERATING PROBLEM---------------------------
+-------- CALLING GPT ----------
+[SYSTEM]:  Be concise and specific. Do not answer the provided problem. What concepts is this problem trying to test? 
+[USER]:  
+Implement differences, a generator function that takes t, a non-empty iterator over numbers. It yields the differences between each pair of adjacent values from t. If t iterates over a positive finite number of values n, then differences should yield n-1 times.
+ 
+def differences(t):
+    '''Yield the differences between adjacent values from iterator t.
+
+    >>> list(differences(iter([5, 2, -100, 103])))
+    [-3, -102, 203]
+    >>> next(differences(iter([39, 100])))
+    61
+    '''
+    "*** YOUR CODE HERE ***"
+
+
+Question Concepts:  This problem is testing the following concepts:\n\n1. **Generators**: Understanding how to implement a generator function in Python that yields values one at a time.\n\n2. **Iterators**: Working with iterators to traverse through a sequence of numbers.\n\n3. **Looping and Iteration**: Using loops to iterate over elements in an iterator and compute differences.\n\n4. **Yield Statement**: Using the `yield` statement to produce a series of values over time, rather than computing them all at once and sending them back.\n\n5. **Adjacent Element Processing**: Calculating differences between consecutive elements in a sequence.\n\n6. **Edge Cases**: Handling edge cases such as iterators with only one element.'
+-------- CALLING GPT ----------
+[SYSTEM]:  You are a computer science professor that is trying to create a new midterm problem. There are multiple ways to change a problem, including changing variable names, changing function names, changing the constants, reversing the polarity of the question, or changing a data type. 
+[USER]:  Generate and return another problem of same difficulty as the following problem without any greetings: 
+Implement differences, a generator function that takes t, a non-empty iterator over numbers. It yields the differences between each pair of adjacent values from t. If t iterates over a positive finite number of values n, then differences should yield n-1 times.
+ 
+def differences(t):
+    '''Yield the differences between adjacent values from iterator t.
+
+    >>> list(differences(iter([5, 2, -100, 103])))
+    [-3, -102, 203]
+    >>> next(differences(iter([39, 100])))
+    61
+    '''
+    "*** YOUR CODE HERE ***"
+
+
+Tweaked Problem:  Implement cumulative_sums, a generator function that takes s, a non-empty iterator over numbers. It yields the cumulative sum of the values from s. If s iterates over a positive finite number of values n, then cumulative_sums should yield n times.\n\n```python\ndef cumulative_sums(s):\n    \'\'\'Yield the cumulative sums of values from iterator s.\n\n    >>> list(cumulative_sums(iter([1, 2, 3, 4])))\n    [1, 3, 6, 10]\n    >>> next(cumulative_sums(iter([5, 10, 15])))\n    5\n    \'\'\'\n    "*** YOUR CODE HERE ***"\n```'
+-------- CALLING GPT ----------
+[SYSTEM]:  You are a question evaluator. You will be given the concepts the question should test and a question. You will analyze the concepts and you will evaluate if the question still tests the concepts. Return yes or no. If no, explain what is missing from the question.
+[USER]:  Concepts: This problem is testing the following concepts:\n\n1. **Generators**: Understanding how to implement a generator function in Python that yields values one at a time.\n\n2. **Iterators**: Working with iterators to traverse through a sequence of numbers.\n\n3. **Looping and Iteration**: Using loops to iterate over elements in an iterator and compute differences.\n\n4. **Yield Statement**: Using the `yield` statement to produce a series of values over time, rather than computing them all at once and sending them back.\n\n5. **Adjacent Element Processing**: Calculating differences between consecutive elements in a sequence.\n\n6. **Edge Cases**: Handling edge cases such as iterators with only one element.'
+Question: Implement cumulative_sums, a generator function that takes s, a non-empty iterator over numbers. It yields the cumulative sum of the values from s. If s iterates over a positive finite number of values n, then cumulative_sums should yield n times.\n\n```python\ndef cumulative_sums(s):\n    \'\'\'Yield the cumulative sums of values from iterator s.\n\n    >>> list(cumulative_sums(iter([1, 2, 3, 4])))\n    [1, 3, 6, 10]\n    >>> next(cumulative_sums(iter([5, 10, 15])))\n    5\n    \'\'\'\n    "*** YOUR CODE HERE ***"\n```'
+Implement differences, a generator function that takes t, a non-empty iterator over numbers. It yields the differences between each pair of adjacent values from t. If t iterates over a positive finite number of values n, then differences should yield n-1 times.
+ 
+def differences(t):
+    '''Yield the differences between adjacent values from iterator t.
+
+    >>> list(differences(iter([5, 2, -100, 103])))
+    [-3, -102, 203]
+    >>> next(differences(iter([39, 100])))
+    61
+    '''
+    "*** YOUR CODE HERE ***"
+
+
+Feedback:  Yes, the question tests the specified concepts. The task requires implementing a generator function `differences` which involves:\n\n1. **Generators**: The function `differences` is explicitly described as a generator function that yields values one at a time.\n2. **Iterators**: The function takes an iterator `t` as input and processes it.\n3. **Looping and Iteration**: The function needs to iterate over the elements of the iterator `t` to compute differences.\n4. **Yield Statement**: The use of `yield` is implied in the task to produce differences between adjacent elements.\n5. **Adjacent Element Processing**: The core task is to calculate differences between consecutive elements in the iterator.\n6. **Edge Cases**: The problem specifies that `t` is a non-empty iterator, which implies consideration of edge cases like iterators with only one element (though it doesn't explicitly state how to handle them, the non-empty condition suggests handling at least two elements).\n\nThe question aligns with the concepts and requires the implementation of a generator function that processes an iterator to yield differences between adjacent elements, using loops and the `yield` statement."
+-------------------------SOLVING PROBLEM---------------------------
+-------- CALLING GPT ----------
+[SYSTEM]:  You are an expert solver. You look at the questions, think about the correct solution, and return only the solution to the questions without the explanations.
+[USER]:  Answer the following question in a .py text format taking special care of tabs: Implement cumulative_sums, a generator function that takes s, a non-empty iterator over numbers. It yields the cumulative sum of the values from s. If s iterates over a positive finite number of values n, then cumulative_sums should yield n times.\n\n```python\ndef cumulative_sums(s):\n    \'\'\'Yield the cumulative sums of values from iterator s.\n\n    >>> list(cumulative_sums(iter([1, 2, 3, 4])))\n    [1, 3, 6, 10]\n    >>> next(cumulative_sums(iter([5, 10, 15])))\n    5\n    \'\'\'\n    "*** YOUR CODE HERE ***"\n```'
+Generated Solution:  ```python\ndef cumulative_sums(s):\n    '''Yield the cumulative sums of values from iterator s.'''\n    total = 0\n    for value in s:\n        total += value\n        yield total\n```"
+-------- VERIFYING PROBLEM ------------
+----- PARSING THE TEST CASE EXAMPLES -----

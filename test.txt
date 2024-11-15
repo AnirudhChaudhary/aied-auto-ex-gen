@@ -1,0 +1,22 @@
+
+def ratios(s):
+    '''Yield the ratios between adjacent values from iterator s.
+
+    >>> list(ratios(iter([10, 5, 20, 4])))
+    [0.5, 4.0, 0.2]
+    >>> next(ratios(iter([50, 25])))
+    0.5
+    >>> list(ratios(iter([10])))
+    []
+    '''
+    try:
+        prev = next(s)
+    except StopIteration:
+        return
+
+    for current in s:
+        yield current / prev
+        prev = current
+assert list(ratios(iter([10, 5, 20, 4]))) == [0.5, 4.0, 0.2]
+assert next(ratios(iter([50, 25]))) == 0.5
+assert list(ratios(iter([10]))) == []

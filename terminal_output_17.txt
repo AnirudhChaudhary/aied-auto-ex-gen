@@ -1,0 +1,18 @@
+------------------------- RUNNING PIPELINE FOR 2 ITERATIONS -----------------------------
+-------------------------GENERATING PROBLEM---------------------------
+-------- CALLING GPT ----------
+[SYSTEM]:  Be concise and specific. Do not answer the provided problem. What concepts is this problem trying to test? 
+[USER]:  
+Implement differences, a generator function that takes t, a non-empty iterator over numbers. It yields the differences between each pair of adjacent values from t. If t iterates over a positive finite number of values n, then differences should yield n-1 times.
+ 
+def differences(t):
+    '''Yield the differences between adjacent values from iterator t.
+
+    >>> list(differences(iter([5, 2, -100, 103])))
+    [-3, -102, 203]
+    >>> next(differences(iter([39, 100])))
+    61
+    '''
+    "*** YOUR CODE HERE ***"
+
+
