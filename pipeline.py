@@ -38,13 +38,13 @@ class Pipeline:
             # these should all return strings
             if not feedback:
                 difficulty = "same"
-                instruction="You are a computer science professor that is trying to create a new midterm problem. There are multiple ways to change a problem, including changing variable names, changing function names, changing the constants, reversing the polarity of the question, or changing a data type. "
-                prompt=f"Generate and return another problem of {difficulty} difficulty as the following problem without any greetings: "
+                instruction="You are a computer science professor that is trying to create a new midterm problem. There are multiple ways to change a problem, including changing variable names, changing function names, changing the constants, reversing the polarity of the question, or changing a data type. Make sure the problem does not have escape characters and all triple quotes look like '''."
+                prompt=f"Generate and return another problem of {difficulty} difficulty as the following problem without any greetings.: "
                 raw_problem = self.question_generator_agent.call(message=prev_prob, system_instruction=instruction, llm_prompt=prompt)
                 problem = Agent.parse_output(raw_problem)
                 print("Tweaked Problem: ", problem)
             else:
-                instruction="You are a computer science professor creating a midterm problem but you've found some bugs. Please fix the problem and return the fixed problem, without any greetings or telling me what you fixed."
+                instruction="You are a computer science professor creating a midterm problem but you've found some bugs. Please fix the problem and return the fixed problem, without any greetings or telling me what you fixed. Make sure the problem does not have escape characters and all triple quotes look like '''. "
                 prompt=f"Fix the following problem: {problem}."
                 message=f"The following is the feedback: {feedback}"
                 problem = self.question_generator_agent.call(message=message, system_instruction=instruction, llm_prompt=prompt)
@@ -80,7 +80,8 @@ class Pipeline:
             test_case_lines = ex_test_case.split("\\n")
             print("test case w slash: ", test_case_lines)
         else:
-            print("WE GOT A WEIRD STRUCTURE BACK FROM THE PROBLEM GENERATOR AND IT LOOKS LIKE THIS: ", problem)
+            print("Weren't able to parse the test cases: ", problem)
+            test_case_lines = []
 
         # instruction = f"You are an expert verifier. You will be given an incomplete problem and you will generate a few test cases that test the functionality of the program. An example is: {ex_test_case}. Generate your test cases without the >>>"
         # prompt = "Generate these assertion test cases in a text format for the following problem, separated by a newline character. Do not answer the provided problem. "
@@ -92,36 +93,45 @@ class Pipeline:
 
         # --------- TEST CASE GENERATION ---------
         # ( these are the lines that will go into the file )
+        print("LLM thought this was a valid problem: ", valid_problem)
+        if len(test_case_lines) != 0:
+            final_lines = []
+            num_lines = len(test_case_lines)        # tells us how many lines there are
+            i = 0
+            while i < num_lines-1:  # we don't want anything past the newline character of the last line
+                if test_case_lines[i].lstrip().startswith(">>>"):
+                    # Then strip ">>> " specifically from the start
+                    test_case_lines[i] = test_case_lines[i].lstrip()[4:]
+                    # print(f"test case line {i}: ", test_case_lines[i])
+                    if ">>>" in test_case_lines[i+1]:   # if we have a >>> in the previous line then we are guaranteed to have a new line...afaik
+                        final_lines.append(test_case_lines[i])
+                        
+                    else:
+                        final_lines.append("assert " + test_case_lines[i] + " == ")
 
-        final_lines = []
-        num_lines = len(test_case_lines)        # tells us how many lines there are
-        i = 0
-        while i < num_lines-1:  # we don't want anything past the newline character of the last line
-            if test_case_lines[i].lstrip().startswith(">>>"):
-                # Then strip ">>> " specifically from the start
-                test_case_lines[i] = test_case_lines[i].lstrip()[4:]
-                # print(f"test case line {i}: ", test_case_lines[i])
-                if ">>>" in test_case_lines[i+1]:   # if we have a >>> in the previous line then we are guaranteed to have a new line...afaik
-                    final_lines.append(test_case_lines[i])
-                    
-                else:
-                    final_lines.append("assert " + test_case_lines[i] + " == ")
+                else:       # output that we expect
+                    final_lines[-1] = final_lines[-1] + str(test_case_lines[i].strip(" "))  # we don't want any spaces
 
-            else:       # output that we expect
-                final_lines[-1] = final_lines[-1] + str(test_case_lines[i].strip(" "))  # we don't want any spaces
+                i += 1
+                # print(final_lines)
+            
+            print("----- FINAL ------")
+            for line in final_lines:
+                print(line)
+            
+            print("solution: ", solution)
+            # print("final lines: ", final_lines)
+            is_correct = self.verifier(solution, final_lines)
+            print("Verifier was able to verify the problem correctness: ", is_correct)
+            print("final problem: ", problem)
+        else:
+            print("ran into some problem with verification, perhaps parsing")
+            print("----- FINAL ------")
+            final_problem = problem.split("\\n")
+            for line in final_problem:
+                print(line)
+            # print("final problem: ", problem)
 
-            i += 1
-            # print(final_lines)
-        
-        print("----- FINAL ------")
-        for line in final_lines:
-            print(line)
-        
-        print("solution: ", solution)
-        # print("final lines: ", final_lines)
-        is_correct = self.verifier(solution, final_lines)
-        print("is correct: ", is_correct)
-        print("final problem: ", problem)
         return problem
 
     def parse_solution_and_write_to_file(self, llm_output, file, ext=".txt"):
@@ -170,8 +180,11 @@ class Pipeline:
         
 
         # run the file using python interpreter
-        result = subprocess.run(['python3', test_file], stdout=subprocess.PIPE)
-        output = result.stdout.decode('utf-8')
+        try:
+            result = subprocess.run(['python3', test_file], stdout=subprocess.PIPE)
+            output = result.stdout.decode('utf-8')
+        except:
+            print("no work")
 
         if "AssertionError" in output:
             output = False
@@ -312,14 +325,19 @@ pipeline.set_agents(problem_agent, solver_agent, verifier_agent, comprehendor_ag
 # Define the summary of the chapters
 
 previous_problems = """
-Implement differences, a generator function that takes t, a non-empty iterator over numbers. It yields the differences between each pair of adjacent values from t. If t iterates over a positive finite number of values n, then differences should yield n-1 times.\n 
-def differences(t):
-    '''Yield the differences between adjacent values from iterator t.
+Implement overlap, which takes two linked lists of numbers called s and t that are sorted in increasing order and have no repeated elements within each list. It returns the count of how many numbers appear in both lists.
 
-    >>> list(differences(iter([5, 2, -100, 103])))
-    [-3, -102, 203]
-    >>> next(differences(iter([39, 100])))
-    61
+def overlap(s, t):
+    '''For increasing s and t, count the numbers that appear in both.
+
+    >>> a = Link(3, Link(4, Link(6, Link(7, Link(9, Link(10))))))
+    >>> b = Link(1, Link(3, Link(5, Link(7, Link(8)))))
+    >>> overlap(a, b)  # 3 and 7
+    2
+    >>> overlap(a.rest, b)  # just 7
+    1
+    >>> overlap(Link(0, a), Link(0, b))
+    3
     '''
     "*** YOUR CODE HERE ***"
 
