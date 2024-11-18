@@ -6,6 +6,7 @@ import os
 import json
 from openai import OpenAI
 import subprocess
+import re
 
 class Pipeline:
     def __init__(self, iters, blocks):
@@ -26,13 +27,14 @@ class Pipeline:
     def run(self,prev_prob):
         print(f"------------------------- RUNNING PIPELINE FOR {self.iters} ITERATIONS -----------------------------")
         print("-------------------------GENERATING PROBLEM---------------------------")
-        instruction="Be concise and specific. Do not answer the provided problem. What concepts is this problem trying to test? "
+        instruction="Be concise. What, up to two (1-2 word) concepts is this problem trying to test? "
         raw_question_concepts = self.comprehendor_agent.call(message=prev_prob, system_instruction=instruction)
         question_concepts = Agent.parse_output(raw_question_concepts)
         print("Question Concepts: ", question_concepts)
         feedback = None
         valid_problem = False
-        for _ in range(self.iters):
+        for i in range(self.iters):
+            print("-------------------------TWEAKING PROBLEM ITERATION " + str(i) + " ---------------------------")
             if valid_problem:
                 break
             # these should all return strings
@@ -44,15 +46,15 @@ class Pipeline:
                 problem = Agent.parse_output(raw_problem)
                 print("Tweaked Problem: ", problem)
             else:
-                instruction="You are a computer science professor creating a midterm problem but you've found some bugs. Please fix the problem and return the fixed problem, without any greetings or telling me what you fixed. Make sure the problem does not have escape characters and all triple quotes look like '''. "
+                instruction="You are a computer science professor creating a midterm problem but you've received some feedback on your generated problem. Please fix the problem formulation and return the fixed problem, without any greetings or telling me what you fixed. Make sure that you are not answering the question and make sure there is nothing from any previous problems. Leave space for student code. "
                 prompt=f"Fix the following problem: {problem}."
                 message=f"The following is the feedback: {feedback}"
                 problem = self.question_generator_agent.call(message=message, system_instruction=instruction, llm_prompt=prompt)
                 problem = Agent.parse_output(problem)
 
-            instruction="You are a question evaluator. You will be given the concepts the question should test and a question. You will analyze the concepts and you will evaluate if the question still tests the concepts. Return yes or no. If no, explain what is missing from the question."
+            instruction="You are a question evaluator. You will be given the concepts the question should test and a question. You will analyze the concepts and you will evaluate if the question still tests the concepts. Return yes or no. If no, only explain what is missing from the question."
             prompt = f"Concepts: {question_concepts}\nQuestion: {problem}"
-            feedback = self.eval_agent.call(message=prev_prob, system_instruction=instruction, llm_prompt=prompt)
+            feedback = self.eval_agent.call(message="", system_instruction=instruction, llm_prompt=prompt)
             feedback = Agent.parse_output(feedback)
             valid_problem = "yes" in feedback.lower()     # if we have a valid problem we don't have to go through and tweak the problem
             print("Feedback: ", feedback)
@@ -69,18 +71,24 @@ class Pipeline:
 
         comment_beginning = problem.index(">>>")                        # this is the start of the test cases
         stripped_beginning = problem[comment_beginning:]                # remove everything until the start of the test cases
-        if "'''" in stripped_beginning:                                 # this is the "end" of the test case section 
-            comment_end = stripped_beginning.index("'''")       
+        match = re.search(r"(\'\'\'|\\\'\\\'\\\')", stripped_beginning)
+        if match:
+            comment_end = match.start()
             ex_test_case = stripped_beginning[:comment_end]
             test_case_lines = ex_test_case.split("\\n")
-            print("test case ''': ", test_case_lines)
-        elif "\'\'\'" in stripped_beginning:
-            comment_end = stripped_beginning.index("\'\'\'")
-            ex_test_case = stripped_beginning[:comment_end]
-            test_case_lines = ex_test_case.split("\\n")
-            print("test case w slash: ", test_case_lines)
+            # print("test case w slash: ", test_case_lines)
+        # if "'''" in stripped_beginning:                                 # this is the "end" of the test case section 
+        #     comment_end = stripped_beginning.index("'''")       
+        #     ex_test_case = stripped_beginning[:comment_end]
+        #     test_case_lines = ex_test_case.split("\\n")
+        #     print("test case ''': ", test_case_lines)
+        # elif "\'\'\'" in stripped_beginning:
+        #     comment_end = stripped_beginning.index("\'\'\'")
+        #     ex_test_case = stripped_beginning[:comment_end]
+        #     test_case_lines = ex_test_case.split("\\n")
+        #     print("test case w slash: ", test_case_lines)
         else:
-            print("Weren't able to parse the test cases: ", problem)
+            print("Weren't able to parse the test cases: ", stripped_beginning)
             test_case_lines = []
 
         # instruction = f"You are an expert verifier. You will be given an incomplete problem and you will generate a few test cases that test the functionality of the program. An example is: {ex_test_case}. Generate your test cases without the >>>"
@@ -115,21 +123,31 @@ class Pipeline:
                 i += 1
                 # print(final_lines)
             
-            print("----- FINAL ------")
-            for line in final_lines:
-                print(line)
+            # print("----- FINAL ------")
+            # for line in final_lines:
+            #     print(line)
             
             print("solution: ", solution)
             # print("final lines: ", final_lines)
             is_correct = self.verifier(solution, final_lines)
-            print("Verifier was able to verify the problem correctness: ", is_correct)
+            print("Verifier [Empirical] was able to verify the problem correctness: ", is_correct)
             print("final problem: ", problem)
+
         else:
             print("ran into some problem with verification, perhaps parsing")
-            print("----- FINAL ------")
-            final_problem = problem.split("\\n")
-            for line in final_problem:
-                print(line)
+            instruction = f"You are an expert verifier. You will be given a potential solution to a problem and you have to verify whether the solution satisfies the docstring tests. The tests are within the function denoted by ''' and start with >>>."
+            prompt = "Return yes or no whether the solution passes the test cases in the docstring. "
+            problem_solution_message = f"\nProblem: {solution}\n"
+
+            test_cases_chat_message = self.verifier_agent.call(message=problem_solution_message, system_instruction=instruction, llm_prompt=prompt)
+            test_cases = Agent.parse_output(test_cases_chat_message)
+            print("Verifier LLM Thoughts: ", test_cases)
+            print("Verifier [LLM] was able to verify the problem correctness: ", "yes" in test_cases.lower())
+        
+        print("----- FINAL ------")
+        final_problem = problem.split("\\n")
+        for line in final_problem:
+            print(line + "\n")
             # print("final problem: ", problem)
 
         return problem
@@ -160,13 +178,15 @@ class Pipeline:
         # create a new file and populate it with the solution and test case
         llm_output_beginning_removed = solution.strip("```").replace("python", "", 1).strip()
         llm_output_beginning_removed_split = llm_output_beginning_removed.split("\\n")
-        print("llm output after splitting by newline character: ", llm_output_beginning_removed_split)
-        # llm_output_beginning_removed_split = [x.strip("\\n") for x in llm_output_beginning_removed_split] # don't think we want anything after the last \n
-        print("llm split: ", llm_output_beginning_removed_split)
+        # print("llm output after splitting by newline character: ", llm_output_beginning_removed_split)
+        # print("llm split: ", llm_output_beginning_removed_split)
         llm_output_beginning_removed_split = llm_output_beginning_removed_split[:-1]
         test_file = "test.txt"
         with open(test_file,"w") as f:
             for line in llm_output_beginning_removed_split:
+                if "#" in line:         # handles the case where the LLM adds comments into the test case example which messes up the assert
+                    comment_index = line.index("#")
+                    line = line[:comment_index]
                 line = line.replace("\\n","\n")
                 f.write(line)
                 f.write("\n")
@@ -182,6 +202,7 @@ class Pipeline:
         # run the file using python interpreter
         try:
             result = subprocess.run(['python3', test_file], stdout=subprocess.PIPE)
+
             output = result.stdout.decode('utf-8')
         except:
             print("no work")
@@ -325,19 +346,14 @@ pipeline.set_agents(problem_agent, solver_agent, verifier_agent, comprehendor_ag
 # Define the summary of the chapters
 
 previous_problems = """
-Implement overlap, which takes two linked lists of numbers called s and t that are sorted in increasing order and have no repeated elements within each list. It returns the count of how many numbers appear in both lists.
+Implement differences, a generator function that takes t, a non-empty iterator over numbers. It yields the differences between each pair of adjacent values from t. If t iterates over a positive finite number of values n, then differences should yield n-1 times.\n 
+def differences(t):
+    '''Yield the differences between adjacent values from iterator t.
 
-def overlap(s, t):
-    '''For increasing s and t, count the numbers that appear in both.
-
-    >>> a = Link(3, Link(4, Link(6, Link(7, Link(9, Link(10))))))
-    >>> b = Link(1, Link(3, Link(5, Link(7, Link(8)))))
-    >>> overlap(a, b)  # 3 and 7
-    2
-    >>> overlap(a.rest, b)  # just 7
-    1
-    >>> overlap(Link(0, a), Link(0, b))
-    3
+    >>> list(differences(iter([5, 2, -100, 103])))
+    [-3, -102, 203]
+    >>> next(differences(iter([39, 100])))
+    61
     '''
     "*** YOUR CODE HERE ***"
 
