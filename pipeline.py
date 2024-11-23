@@ -31,45 +31,66 @@ class Pipeline:
         raw_question_concepts = self.comprehendor_agent.call(message=prev_prob, system_instruction=instruction)
         question_concepts = Agent.parse_output(raw_question_concepts)
         print("Question Concepts: ", question_concepts)
-        feedback = None
-        valid_problem = False
-        for i in range(self.iters):
-            print("-------------------------TWEAKING PROBLEM ITERATION " + str(i) + " ---------------------------")
-            if valid_problem:
-                break
-            # these should all return strings
-            if not feedback:
-                difficulty = "same"
-                instruction="You are a computer science professor that is trying to create a new midterm problem. There are multiple ways to change a problem, including changing variable names, changing function names, changing the constants, reversing the polarity of the question, or changing a data type. Make sure the problem does not have escape characters and all triple quotes look like '''."
-                prompt=f"Generate and return another problem of {difficulty} difficulty as the following problem without any greetings.: "
-                raw_problem = self.question_generator_agent.call(message=prev_prob, system_instruction=instruction, llm_prompt=prompt)
-                problem = Agent.parse_output(raw_problem)
-                print("Tweaked Problem: ", problem)
-            else:
-                instruction="You are a computer science professor creating a midterm problem but you've received some feedback on your generated problem. Please fix the problem formulation and return the fixed problem, without any greetings or telling me what you fixed. Make sure that you are not answering the question and make sure there is nothing from any previous problems. Leave space for student code. "
-                prompt=f"Fix the following problem: {problem}."
-                message=f"The following is the feedback: {feedback}"
-                problem = self.question_generator_agent.call(message=message, system_instruction=instruction, llm_prompt=prompt)
-                problem = Agent.parse_output(problem)
+        
+        
+        num_problems = 3
+        ############################
+        difficulty = "same"
+        instruction="You are a computer science professor that is trying to create a new midterm problems. There are multiple ways to change a problem, including changing variable names, changing function names, changing the constants, reversing the polarity of the question, or changing a data type. Make sure the problem does not have escape characters and all triple quotes look like '''."
+        prompt=f"Generate and return {num_problems} problems of {difficulty} difficulty as the following problem without any greetings, seperated by --- NEW PROBLEM ---: "
+        raw_problem = self.question_generator_agent.call(message=prev_prob, system_instruction=instruction, llm_prompt=prompt)
+        problem = Agent.parse_output(raw_problem)
+        problem_list = problem.split("--- NEW PROBLEM ---")
+        final_problem_list = []
+        print("problem list len: ", len(problem_list))
+        # print("Tweaked Problem: ", problem)
+        for problem in problem_list[1:]:
+            feedback = None
+            valid_problem = False
+            for i in range(self.iters):
+                # we have generated the problem now we want to evaluate it
+                instruction="You are a question evaluator. You will be given the concepts the question should test and a question. You will analyze the concepts and you will evaluate if the question still tests the concepts. Return yes or no. If no, only explain what is missing from the question."
+                prompt = f"Concepts: {question_concepts}\nQuestion: {problem}"
+                feedback = self.eval_agent.call(message="", system_instruction=instruction, llm_prompt=prompt)
+                feedback = Agent.parse_output(feedback)
+                valid_problem = "yes" in feedback.lower()     # if we have a valid problem we don't have to go through and tweak the problem
+                print("Feedback: ", feedback)
 
-            instruction="You are a question evaluator. You will be given the concepts the question should test and a question. You will analyze the concepts and you will evaluate if the question still tests the concepts. Return yes or no. If no, only explain what is missing from the question."
-            prompt = f"Concepts: {question_concepts}\nQuestion: {problem}"
-            feedback = self.eval_agent.call(message="", system_instruction=instruction, llm_prompt=prompt)
-            feedback = Agent.parse_output(feedback)
-            valid_problem = "yes" in feedback.lower()     # if we have a valid problem we don't have to go through and tweak the problem
-            print("Feedback: ", feedback)
+                print("-------------------------TWEAKING PROBLEM ITERATION " + str(i) + " ---------------------------")
+                if valid_problem:
+                    break
+                if feedback:
+                    instruction="You are a computer science professor creating a midterm problem but you've received some feedback on your generated problem. Please fix the problem formulation and return the fixed problem, without any greetings or telling me what you fixed. Make sure that you are not answering the question and make sure there is nothing from any previous problems."
+                    prompt=f"Fix the following problem: {problem}."
+                    message=f"The following is the feedback: {feedback}"
+                    problem = self.question_generator_agent.call(message=message, system_instruction=instruction, llm_prompt=prompt)
+                    problem = Agent.parse_output(problem)
+            
+            final_problem_list.append(problem)
+            print("Generated Problem: ", problem)
 
         print("-------------------------SOLVING PROBLEM---------------------------")
         instruction = "You are an expert solver. You look at the questions, think about the correct solution, and return only the solution to the questions without the explanations."
-        prompt = "Answer the following question in a .py text format taking special care of tabs: "
-        solution = self.solver_agent.call(message=problem, system_instruction=instruction, llm_prompt=prompt)
-        solution = Agent.parse_output(solution)
-        print("Generated Solution: ", solution)
+        prompt = "Answer the following question in a .py text format."
+        prob_w_sol_list = []
+        for problem in final_problem_list:
+            solution = self.solver_agent.call(message=problem, system_instruction=instruction, llm_prompt=prompt)
+            solution = Agent.parse_output(solution)
+            prob_w_sol_list.append(solution)
+            print("Generated Solution: ", solution)
+        
+        print("Solutions: ", prob_w_sol_list)
+        
+        print("-------------------------")
+        ######### ANEESH YOU CAN START HERE ############
 
         print("-------- VERIFYING PROBLEM ------------")
         print("----- PARSING THE TEST CASE EXAMPLES -----")
 
-        comment_beginning = problem.index(">>>")                        # this is the start of the test cases
+        try:
+            comment_beginning = problem.index(">>>")                        # this is the start of the test cases
+        except:
+            comment_beginning = 0
         stripped_beginning = problem[comment_beginning:]                # remove everything until the start of the test cases
         match = re.search(r"(\'\'\'|\\\'\\\'\\\')", stripped_beginning)
         if match:
