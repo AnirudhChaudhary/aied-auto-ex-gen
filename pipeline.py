@@ -7,6 +7,10 @@ import json
 from openai import OpenAI
 import subprocess
 import re
+import tempfile  # Import tempfile for temporary file handling
+import doctest 
+import sys
+import io
 
 class Pipeline:
     def __init__(self, iters, blocks):
@@ -22,223 +26,182 @@ class Pipeline:
         self.verifier_agent = verifier_agent
         self.question_generator_agent = qg_agent
         self.comprehendor_agent = comprehendor_agent
-        self.eval_agent = eval_agent    
+        self.eval_agent = eval_agent   
 
-    def run(self,prev_prob):
-        print(f"------------------------- RUNNING PIPELINE FOR {self.iters} ITERATIONS -----------------------------")
-        print("-------------------------GENERATING PROBLEM---------------------------")
+
+    def extract_question_concepts(self, prev_prob):
         instruction="Be concise. What, up to two (1-2 word) concepts is this problem trying to test? "
         raw_question_concepts = self.comprehendor_agent.call(message=prev_prob, system_instruction=instruction)
         question_concepts = Agent.parse_output(raw_question_concepts)
         print("Question Concepts: ", question_concepts)
-        
-        
+        return question_concepts
+
+    def generate_problems(self, prev_prob):
         num_problems = 3
-        ############################
         difficulty = "same"
-        instruction="You are a computer science professor that is trying to create a new midterm problems. There are multiple ways to change a problem, including changing variable names, changing function names, changing the constants, reversing the polarity of the question, or changing a data type. Make sure the problem does not have escape characters and all triple quotes look like '''."
+        instruction="You are a computer science professor that is trying to create a new midterm problems. There are multiple ways to change a problem, including changing variable names, changing function names, changing the constants, reversing the polarity of the question, or changing a data type. Make sure that the problems have corresponding docstring tests for correctness."
         prompt=f"Generate and return {num_problems} problems of {difficulty} difficulty as the following problem without any greetings, seperated by --- NEW PROBLEM ---: "
         raw_problem = self.question_generator_agent.call(message=prev_prob, system_instruction=instruction, llm_prompt=prompt)
         problem = Agent.parse_output(raw_problem)
         problem_list = problem.split("--- NEW PROBLEM ---")
-        final_problem_list = []
-        print("problem list len: ", len(problem_list))
-        # print("Tweaked Problem: ", problem)
-        for problem in problem_list[1:]:
-            feedback = None
-            valid_problem = False
-            for i in range(self.iters):
-                # we have generated the problem now we want to evaluate it
-                instruction="You are a question evaluator. You will be given the concepts the question should test and a question. You will analyze the concepts and you will evaluate if the question still tests the concepts. Return yes or no. If no, only explain what is missing from the question."
-                prompt = f"Concepts: {question_concepts}\nQuestion: {problem}"
-                feedback = self.eval_agent.call(message="", system_instruction=instruction, llm_prompt=prompt)
-                feedback = Agent.parse_output(feedback)
-                valid_problem = "yes" in feedback.lower()     # if we have a valid problem we don't have to go through and tweak the problem
-                print("Feedback: ", feedback)
-
-                print("-------------------------TWEAKING PROBLEM ITERATION " + str(i) + " ---------------------------")
-                if valid_problem:
-                    break
-                if feedback:
-                    instruction="You are a computer science professor creating a midterm problem but you've received some feedback on your generated problem. Please fix the problem formulation and return the fixed problem, without any greetings or telling me what you fixed. Make sure that you are not answering the question and make sure there is nothing from any previous problems."
-                    prompt=f"Fix the following problem: {problem}."
-                    message=f"The following is the feedback: {feedback}"
-                    problem = self.question_generator_agent.call(message=message, system_instruction=instruction, llm_prompt=prompt)
-                    problem = Agent.parse_output(problem)
-            
-            final_problem_list.append(problem)
-            print("Generated Problem: ", problem)
-
+        return problem_list
+    
+    def eval_problem(self, problem, question_concepts):
+        instruction="You are a question evaluator. You will be given the concepts the question should test and a question. You will analyze the concepts and you will evaluate if the question still tests the concepts. Return yes or no. If no, only explain what is missing from the question."
+        prompt = f"Concepts: {question_concepts}\nQuestion: {problem}"
+        feedback = self.eval_agent.call(message="", system_instruction=instruction, llm_prompt=prompt)
+        feedback = Agent.parse_output(feedback)
+        valid_problem = "yes" in feedback.lower()     # if we have a valid problem we don't have to go through and tweak the problem
+        # print("Feedback: ", feedback)
+        return valid_problem, feedback
+    
+    def fix_prob_with_feedback(self, problem, feedback):
+        if "failed" not in feedback.lower():
+            instruction="You are a computer science professor creating a midterm problem but you've received some feedback on your generated problem. Please fix the problem formulation and return the fixed problem, without any greetings or telling me what you fixed. Make sure that you are not answering the question. You may be given a solution, please ignore and only return the reformulated question."
+            prompt=f"Fix the following problem: {problem}."
+            message=f"The following is the feedback: {feedback}"
+        else:
+            instruction="You are a computer science professor creating a midterm problem but you've received some feedback on your generated problem. It looks like the generated tests are incorrect! Think carefully about the question and what the output of the problem should be and fix the docstring tests for the failed tests. "
+            prompt=f"Fix the following problem: {problem}."
+            message=f"The following is the feedback: {feedback}"
+        problem = self.question_generator_agent.call(message=message, system_instruction=instruction, llm_prompt=prompt)
+        problem = Agent.parse_output(problem)
+        return problem
+    
+    def solve_problem(self, problem):
         print("-------------------------SOLVING PROBLEM---------------------------")
         instruction = "You are an expert solver. You look at the questions, think about the correct solution, and return only the solution to the questions without the explanations."
-        prompt = "Answer the following question in a .py text format."
-        prob_w_sol_list = []
-        for problem in final_problem_list:
-            solution = self.solver_agent.call(message=problem, system_instruction=instruction, llm_prompt=prompt)
-            solution = Agent.parse_output(solution)
-            prob_w_sol_list.append(solution)
-            print("Generated Solution: ", solution)
+        prompt = "Fill in the solution and make sure to keep the original docstring test content as well. "
+        solution = self.solver_agent.call(message=problem, system_instruction=instruction, llm_prompt=prompt)
+        solution = Agent.parse_output(solution)
+        print("Generated Solution: ", solution)
+        return solution
         
-        print("Solutions: ", prob_w_sol_list)
-        
-        print("-------------------------")
-        ######### ANEESH YOU CAN START HERE ############
-
-        print("-------- VERIFYING PROBLEM ------------")
-        print("----- PARSING THE TEST CASE EXAMPLES -----")
-
-        try:
-            comment_beginning = problem.index(">>>")                        # this is the start of the test cases
-        except:
-            comment_beginning = 0
-        stripped_beginning = problem[comment_beginning:]                # remove everything until the start of the test cases
-        match = re.search(r"(\'\'\'|\\\'\\\'\\\')", stripped_beginning)
-        if match:
-            comment_end = match.start()
-            ex_test_case = stripped_beginning[:comment_end]
-            test_case_lines = ex_test_case.split("\\n")
-            # print("test case w slash: ", test_case_lines)
-        # if "'''" in stripped_beginning:                                 # this is the "end" of the test case section 
-        #     comment_end = stripped_beginning.index("'''")       
-        #     ex_test_case = stripped_beginning[:comment_end]
-        #     test_case_lines = ex_test_case.split("\\n")
-        #     print("test case ''': ", test_case_lines)
-        # elif "\'\'\'" in stripped_beginning:
-        #     comment_end = stripped_beginning.index("\'\'\'")
-        #     ex_test_case = stripped_beginning[:comment_end]
-        #     test_case_lines = ex_test_case.split("\\n")
-        #     print("test case w slash: ", test_case_lines)
-        else:
-            print("Weren't able to parse the test cases: ", stripped_beginning)
-            test_case_lines = []
-
-        # instruction = f"You are an expert verifier. You will be given an incomplete problem and you will generate a few test cases that test the functionality of the program. An example is: {ex_test_case}. Generate your test cases without the >>>"
-        # prompt = "Generate these assertion test cases in a text format for the following problem, separated by a newline character. Do not answer the provided problem. "
-        # problem_solution_message = f"\nProblem: {problem}\n"
-
-        # test_cases_chat_message = self.verifier_agent.call(message=problem_solution_message, system_instruction=instruction, llm_prompt=prompt)
-        # test_cases = Agent.parse_output(test_cases_chat_message)
 
 
-        # --------- TEST CASE GENERATION ---------
-        # ( these are the lines that will go into the file )
-        print("LLM thought this was a valid problem: ", valid_problem)
-        if len(test_case_lines) != 0:
-            final_lines = []
-            num_lines = len(test_case_lines)        # tells us how many lines there are
-            i = 0
-            while i < num_lines-1:  # we don't want anything past the newline character of the last line
-                if test_case_lines[i].lstrip().startswith(">>>"):
-                    # Then strip ">>> " specifically from the start
-                    test_case_lines[i] = test_case_lines[i].lstrip()[4:]
-                    # print(f"test case line {i}: ", test_case_lines[i])
-                    if ">>>" in test_case_lines[i+1]:   # if we have a >>> in the previous line then we are guaranteed to have a new line...afaik
-                        final_lines.append(test_case_lines[i])
+    def run(self,prev_prob):
+        count = 1
+        output_file = f'final_output_{count}.txt'
+        while os.path.exists(output_file):
+            count += 1
+            output_file = f'final_output_{count}.txt'
+
+        print("----------- NEW GENERATED PROBLEM --------------")
+        with open(output_file, "a") as f:
+            question_concepts = self.extract_question_concepts(prev_prob)
+            problem_list = self.generate_problems(prev_prob)
+
+            final_problem_list = []
+            print("problem list len: ", len(problem_list))
+            # print("Tweaked Problem: ", problem)
+            for problem in problem_list[1:]:
+                feedback = None
+                valid_problem = False
+                for i in range(self.iters):
+                    # we have generated the problem now we want to evaluate it
+                    valid_problem, feedback = self.eval_problem(problem, question_concepts)
+                    if valid_problem:
+                        break
+                    if feedback:
+                        problem = self.fix_prob_with_feedback(problem, feedback)
+                        print("Tweaked Problem: ", problem)
                         
-                    else:
-                        final_lines.append("assert " + test_case_lines[i] + " == ")
+                
+                final_problem_list.append(problem)
+                print("Generated Problem: ", problem)
 
-                else:       # output that we expect
-                    final_lines[-1] = final_lines[-1] + str(test_case_lines[i].strip(" "))  # we don't want any spaces
-
-                i += 1
-                # print(final_lines)
+            prob_w_sol_list = []
+            for problem in final_problem_list:
+                solution = self.solve_problem(problem)
+                prob_w_sol_list.append(solution)
+            print("Solutions: ", prob_w_sol_list)
             
-            # print("----- FINAL ------")
-            # for line in final_lines:
-            #     print(line)
+            print("-------------------------")
+            ######### ANEESH YOU CAN START HERE ############
+            print("-------- VERIFYING PROBLEM ------------")
+            verified_problems = []
+            for prob in prob_w_sol_list:
+                print("Problem: ", prob)
             
-            print("solution: ", solution)
-            # print("final lines: ", final_lines)
-            is_correct = self.verifier(solution, final_lines)
-            print("Verifier [Empirical] was able to verify the problem correctness: ", is_correct)
-            print("final problem: ", problem)
+                pass_test, feedback, failed_testcases = self.test_docstring_tests(prob)
+                if not pass_test:
+                    print("Failed Test Cases: ", failed_testcases)
+                    prob = self.fix_prob_with_feedback(prob, failed_testcases)
+                    print("Tweaked Problem: ", prob)
+                    solution = self.solve_problem(prob)
+                    pass_test, feedback, failed_testcases = self.test_docstring_tests(solution)
+                    if not pass_test:
+                        print("FAILED AGAIN, SECOND TIME IS NOT THE CHARM", failed_testcases)
+                else:
+                    verified_problems.append(prob)
+                
+                problem_lines = prob.split("\\n")
+                f.write(f"-----Problem-----:\n")
+                for line in problem_lines:
+                    f.write(f"{line}\n")
+                f.write(f"Passed Tests: {feedback}\n")
+                f.write("-------------------------\n")
 
+
+
+        return prob_w_sol_list
+
+
+    def extract_test_cases(self, docstring):
+        test_cases = re.findall(r'>>>.*', docstring)
+        return test_cases
+
+    def clean_solution_code(self, solution_code):
+        code_fence_pattern = r'^```(?:python)?\n([\s\S]*?)\n```"?$'
+        match = re.match(code_fence_pattern, solution_code.strip(), re.MULTILINE)
+        if match:
+            solution_code = match.group(1)
         else:
-            print("ran into some problem with verification, perhaps parsing")
-            instruction = f"You are an expert verifier. You will be given a potential solution to a problem and you have to verify whether the solution satisfies the docstring tests. The tests are within the function denoted by ''' and start with >>>."
-            prompt = "Return yes or no whether the solution passes the test cases in the docstring. "
-            problem_solution_message = f"\nProblem: {solution}\n"
+            solution_code = solution_code.strip('`"\'')
+            if solution_code.startswith('python'):
+                solution_code = solution_code[len('python'):].lstrip()
 
-            test_cases_chat_message = self.verifier_agent.call(message=problem_solution_message, system_instruction=instruction, llm_prompt=prompt)
-            test_cases = Agent.parse_output(test_cases_chat_message)
-            print("Verifier LLM Thoughts: ", test_cases)
-            print("Verifier [LLM] was able to verify the problem correctness: ", "yes" in test_cases.lower())
-        
-        print("----- FINAL ------")
-        final_problem = problem.split("\\n")
-        for line in final_problem:
-            print(line + "\n")
-            # print("final problem: ", problem)
+        solution_code = solution_code.encode('utf-8').decode('unicode_escape')
 
-        return problem
+        return solution_code.strip()
 
-    def parse_solution_and_write_to_file(self, llm_output, file, ext=".txt"):
-        llm_output_beginning_removed = llm_output.strip("```").replace("python", "", 1).strip()
-        llm_output_beginning_removed_split = llm_output_beginning_removed.split("\n")
-        print("llm split: ", llm_output_beginning_removed_split)
+    def test_docstring_tests(self, solution_code):
+        solution_code = self.clean_solution_code(solution_code)
+        print("Solution code :\n", solution_code)
+        print("------END OF SOL CODE-------")
+        if ">>>" not in solution_code:
+            return False, "No doctests found "
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".py") as temp_file:
+            temp_file.write(solution_code)
+            temp_file_path = temp_file.name
 
-        with open(file,"w") as f:
-            for line in llm_output_beginning_removed_split:
-                f.write(line)
-                f.write("\n")
-
-    def verifier(self, solution, test_cases):
-        """
-        This function is verifies that the solution passes the provided test cases by running a python intepreter on the code.
-        Currently we are working in a python setting where solution is a python function.
-
-        Input:
-        - solution : this is the generated `correct` python function
-        - test_cases : this is a string of test cases that are separated by newlines
-
-        Output:
-        - is_correct : this is a boolean that indicates if the solution is correct
-        """
-        
-        # create a new file and populate it with the solution and test case
-        llm_output_beginning_removed = solution.strip("```").replace("python", "", 1).strip()
-        llm_output_beginning_removed_split = llm_output_beginning_removed.split("\\n")
-        # print("llm output after splitting by newline character: ", llm_output_beginning_removed_split)
-        # print("llm split: ", llm_output_beginning_removed_split)
-        llm_output_beginning_removed_split = llm_output_beginning_removed_split[:-1]
-        test_file = "test.txt"
-        with open(test_file,"w") as f:
-            for line in llm_output_beginning_removed_split:
-                if "#" in line:         # handles the case where the LLM adds comments into the test case example which messes up the assert
-                    comment_index = line.index("#")
-                    line = line[:comment_index]
-                line = line.replace("\\n","\n")
-                f.write(line)
-                f.write("\n")
-        
-            for line in test_cases:
-                f.write(line)
-                f.write("\n")
-            
-
-        # save the file to disk
-        
-
-        # run the file using python interpreter
+        temp_dir = os.path.dirname(temp_file_path)
+        sys.path.insert(0, temp_dir)
+        module_name = os.path.splitext(os.path.basename(temp_file_path))[0]
         try:
-            result = subprocess.run(['python3', test_file], stdout=subprocess.PIPE)
+            import importlib.util
+            spec = importlib.util.spec_from_file_location(module_name, temp_file_path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
 
-            output = result.stdout.decode('utf-8')
-        except:
-            print("no work")
+            verbose_output = io.StringIO()
+            sys.stdout = verbose_output  # Redirect stdout
+            result = doctest.testmod(module, verbose=True)
+            sys.stdout = sys.__stdout__  # Restore stdout
 
-        if "AssertionError" in output:
-            output = False
-        elif output == "":
-            output = True
-        else:
-            output = False
+            detailed_output = verbose_output.getvalue()  # Get the captured output
+            verbose_output.close()
 
-        # return the result
-        return output
+            print("----DETAILED OUTPUT----")
+            print(detailed_output)
+            print("-----------------------")
 
-# Pipeline.parse_solution_and_write_to_file("```python\ndef cumulative_sum(s):\n    '''Yield the cumulative sum of values from iterator s.'''\n    total = 0\n    for value in s:\n        total += value\n        yield total\n```", )
+            if result.failed == 0:
+                return True, f"All {result.attempted} doctests passed", ""
+            else:
+                return False, f"{result.failed} out of {result.attempted} doctests failed", detailed_output
+        except Exception as e:
+            return False, f"Error while running doctests: {str(e)}"
 
 class Agent:
     def __init__(self, name="", sys_instruction="", llm_prompt="You are a teacher, teaching a course on Python.", model_name="gpt-4o"):
@@ -380,29 +343,6 @@ def differences(t):
 
 """
 
-# Run the pipeline
-output_file = "output.txt"
 
-def parse_solution_and_write_to_file(llm_output, file, ext=".txt"):
-    llm_output_beginning_removed = llm_output.strip("```").replace("python", "", 1).strip()
-    llm_output_beginning_removed_split = llm_output_beginning_removed.split("\n")
-    print("llm split: ", llm_output_beginning_removed_split)
+new_problem_list = pipeline.run(previous_problems)
 
-    with open(file,"w") as f:
-        for line in llm_output_beginning_removed_split:
-            f.write(line)
-            f.write("\n")
-
-
-# parse_solution_and_write_to_file("```python\ndef cumulative_sum(s):\n    '''Yield the cumulative sum of values from iterator s.'''\n    total = 0\n    for value in s:\n        total += value\n        yield total\n```", "lalala.txt")
-
-
-    
-# parse_test_cases(previous_problems)
-
-new_problem = pipeline.run(previous_problems)
-
-print("----------- NEW GENERATED PROBLEM --------------")
-with open(output_file, "a") as f:
-    f.write("\n")
-    f.write(new_problem)
