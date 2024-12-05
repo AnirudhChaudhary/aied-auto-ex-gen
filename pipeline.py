@@ -11,6 +11,7 @@ import tempfile  # Import tempfile for temporary file handling
 import doctest 
 import sys
 import io
+import ast
 
 class Pipeline:
     def __init__(self, iters, blocks):
@@ -41,7 +42,7 @@ class Pipeline:
         difficulty = "same"
         instruction="You are a computer science professor that is trying to create a new midterm problems. There are multiple ways to change a problem, including changing variable names, changing function names, changing the constants, reversing the polarity of the question, or changing a data type. Make sure that the problems have corresponding docstring tests for correctness."
         prompt=f"Generate and return {num_problems} problems of {difficulty} difficulty as the following problem without any greetings, seperated by --- NEW PROBLEM ---: "
-        raw_problem = self.question_generator_agent.call(message=prev_prob, system_instruction=instruction, llm_prompt=prompt)
+        raw_problem = self.question_generator_agent.call(message=prev_prob, system_instruction=instruction, llm_prompt=prompt, temp=0.3)
         problem = Agent.parse_output(raw_problem)
         problem_list = problem.split("--- NEW PROBLEM ---")
         return problem_list
@@ -49,29 +50,37 @@ class Pipeline:
     def eval_problem(self, problem, question_concepts):
         instruction="You are a question evaluator. You will be given the concepts the question should test and a question. You will analyze the concepts and you will evaluate if the question still tests the concepts. Return yes or no. If no, only explain what is missing from the question."
         prompt = f"Concepts: {question_concepts}\nQuestion: {problem}"
-        feedback = self.eval_agent.call(message="", system_instruction=instruction, llm_prompt=prompt)
+        feedback = self.eval_agent.call(message="", system_instruction=instruction, llm_prompt=prompt, temp=0.0)
         feedback = Agent.parse_output(feedback)
         valid_problem = "yes" in feedback.lower()     # if we have a valid problem we don't have to go through and tweak the problem
         # print("Feedback: ", feedback)
         return valid_problem, feedback
     
     def fix_prob_with_feedback(self, problem, feedback):
-        if "failed" not in feedback.lower():
-            instruction="You are a computer science professor creating a midterm problem but you've received some feedback on your generated problem. Please fix the problem formulation and return the fixed problem, without any greetings or telling me what you fixed. Make sure that you are not answering the question. You may be given a solution, please ignore and only return the reformulated question."
-            prompt=f"Fix the following problem: {problem}."
-            message=f"The following is the feedback: {feedback}"
-        else:
-            instruction="You are a computer science professor creating a midterm problem but you've received some feedback on your generated problem. It looks like the generated tests are incorrect! Think carefully about the question and what the output of the problem should be and fix the docstring tests for the failed tests. "
-            prompt=f"Fix the following problem: {problem}."
-            message=f"The following is the feedback: {feedback}"
+        # if "failed" not in feedback.lower():
+        instruction="You are a computer science professor creating a midterm problem but you've received some feedback on your generated problem. Please fix the problem formulation and return the fixed problem, without any greetings or telling me what you fixed. Make sure that you are not answering the question. You may be given a solution, please ignore and only return the reformulated question."
+        prompt=f"Fix the following problem: {problem}."
+        message=f"The following is the feedback: {feedback}"
+        # else:
+        #     instruction="You are a computer science professor creating a midterm problem but you've received some feedback on your generated problem. It looks like the generated tests are incorrect! Think carefully about the question and what the output of the problem should be and fix the docstring tests for the failed tests. "
+        #     prompt=f"Fix the following problem but keep the original question prompt: {problem}."
+        #     message=f"The following is the feedback: {feedback}"
+        problem = self.question_generator_agent.call(message=message, system_instruction=instruction, llm_prompt=prompt)
+        problem = Agent.parse_output(problem)
+        return problem
+    
+    def docstring_fixer(self, problem, feedback):
+        instruction = "You are a computer science professor teaching Python. You notice one of the practice problems you made has incorrect docstring tests. Walk through each test one by one and check if the docstring test is correct by explaining your reasoning. If not, fix the docstring test. If the docstring test is correct, return the fixed problem. If all the docstring tests are correct, return the problem as is. At the end return the fixed result."
+        prompt=f"Fix the docstring tests in the following problem. The docstrings tests are denoted by >>>. The following is the feedback: {feedback}."
+        message=f"The following is the original problem with the faulty docstrings tests: {problem}."
         problem = self.question_generator_agent.call(message=message, system_instruction=instruction, llm_prompt=prompt)
         problem = Agent.parse_output(problem)
         return problem
     
     def solve_problem(self, problem):
         print("-------------------------SOLVING PROBLEM---------------------------")
-        instruction = "You are an expert solver. You look at the questions, think about the correct solution, and return only the solution to the questions without the explanations."
-        prompt = "Fill in the solution and make sure to keep the original docstring test content as well. "
+        instruction = "You are an expert solver. You look at the questions, think about the correct solution, and add the solution to the question but don't provide the explanations."
+        prompt = "Fill in the solution and make sure to keep the original problem and docstring tests content as well. "
         solution = self.solver_agent.call(message=problem, system_instruction=instruction, llm_prompt=prompt)
         solution = Agent.parse_output(solution)
         print("Generated Solution: ", solution)
@@ -121,20 +130,21 @@ class Pipeline:
             print("-------- VERIFYING PROBLEM ------------")
             verified_problems = []
             for prob in prob_w_sol_list:
-                print("Problem: ", prob)
-            
-                pass_test, feedback, failed_testcases = self.test_docstring_tests(prob)
-                if not pass_test:
-                    print("Failed Test Cases: ", failed_testcases)
-                    prob = self.fix_prob_with_feedback(prob, failed_testcases)
-                    print("Tweaked Problem: ", prob)
-                    solution = self.solve_problem(prob)
-                    pass_test, feedback, failed_testcases = self.test_docstring_tests(solution)
-                    if not pass_test:
-                        print("FAILED AGAIN, SECOND TIME IS NOT THE CHARM", failed_testcases)
-                else:
-                    verified_problems.append(prob)
+                for fix_iter in range(3):
+                    # print("Problem: ", prob)
                 
+                    pass_test, feedback, failed_testcases = self.test_docstring_tests(prob)
+                    if not pass_test:
+                        print("Failed Test Cases: ", failed_testcases)
+                        prob = self.docstring_fixer(prob, failed_testcases)
+                        print("Tweaked Problem: ", prob)
+                        solution = self.solve_problem(prob)
+                        # pass_test, feedback, failed_testcases = self.test_docstring_tests(solution)
+                        # if not pass_test:
+                        #     print("FAILED AGAIN, SECOND TIME IS NOT THE CHARM", failed_testcases)
+                    else:
+                        verified_problems.append(prob)
+                    
                 problem_lines = prob.split("\\n")
                 f.write(f"-----Problem-----:\n")
                 for line in problem_lines:
@@ -160,7 +170,7 @@ class Pipeline:
             solution_code = solution_code.strip('`"\'')
             if solution_code.startswith('python'):
                 solution_code = solution_code[len('python'):].lstrip()
-
+        solution_code = solution_code.strip('```')
         solution_code = solution_code.encode('utf-8').decode('unicode_escape')
 
         return solution_code.strip()
@@ -170,7 +180,7 @@ class Pipeline:
         print("Solution code :\n", solution_code)
         print("------END OF SOL CODE-------")
         if ">>>" not in solution_code:
-            return False, "No doctests found "
+            return False, "No doctests found ", "No doctests found"
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".py") as temp_file:
             temp_file.write(solution_code)
             temp_file_path = temp_file.name
@@ -201,7 +211,8 @@ class Pipeline:
             else:
                 return False, f"{result.failed} out of {result.attempted} doctests failed", detailed_output
         except Exception as e:
-            return False, f"Error while running doctests: {str(e)}"
+            print(f"Error while running doctests: {str(e)}")
+            return False, f"Error while running doctests: {str(e)}", "Error while running doctests: " + str(e)
 
 class Agent:
     def __init__(self, name="", sys_instruction="", llm_prompt="You are a teacher, teaching a course on Python.", model_name="gpt-4o"):
@@ -211,7 +222,7 @@ class Agent:
         self.model_name = model_name
         self.model = OpenAI()
 
-    def call(self, message, system_instruction="", llm_prompt="", tool_choice=False, tools={}):
+    def call(self, message, system_instruction="", llm_prompt="", temp=0.0, tool_choice=False, tools={}):
         """
         Makes the actual call to gpt with the problem prompt and later, if we want tool_choice and tools.
         Input:
@@ -239,7 +250,7 @@ class Agent:
         response = self.model.chat.completions.create(
             model=self.model_name,
             messages=message_to_send,
-            temperature=0.3
+            temperature=temp
         )
 
         # print("response looks like this now: ", response)
@@ -302,7 +313,6 @@ class Agent:
         """
         Parses the output
         """
-
         try:
             content = response["choices"][0]["message"]["content"]
         except:
@@ -312,6 +322,10 @@ class Agent:
             response_first_half_stripped = response[content_start+9:]       # remove everything up until 'content'
             ending_quote_index = response_first_half_stripped.index("refusal=")  # this is the ending quote, but need to be careful that the index is relative to the content
             content = response_first_half_stripped[:ending_quote_index-2]    # 9 is the len(content=') and ending quote index comes from the previous part, with the new relative section
+
+        print("original content: ", content)
+        content = Pipeline.clean_solution_code("",content)
+        print("content after stripping ```: ", content)
 
         return content
 
@@ -323,6 +337,7 @@ comprehendor_agent = Agent(name="Comprehendor", model_name="gpt-4o")
 ques_gen_agent = Agent(name="Breaker", model_name="gpt-4o")
 eval_agent = Agent(name="Question Evaluator", model_name="gpt-4o")
 
+
 # Create the pipeline and set the agents
 pipeline = Pipeline(iters=2, blocks=[])
 pipeline.set_agents(problem_agent, solver_agent, verifier_agent, comprehendor_agent, ques_gen_agent, eval_agent)
@@ -330,17 +345,19 @@ pipeline.set_agents(problem_agent, solver_agent, verifier_agent, comprehendor_ag
 # Define the summary of the chapters
 
 previous_problems = """
-Implement differences, a generator function that takes t, a non-empty iterator over numbers. It yields the differences between each pair of adjacent values from t. If t iterates over a positive finite number of values n, then differences should yield n-1 times.\n 
-def differences(t):
-    '''Yield the differences between adjacent values from iterator t.
-
-    >>> list(differences(iter([5, 2, -100, 103])))
-    [-3, -102, 203]
-    >>> next(differences(iter([39, 100])))
-    61
+def strips(t):
+'''Yield the paths from the root to a leaf of Tree t that form strips. A strip is a list of integers in which each integer is one more than the last.
+    >>> list(strips(Tree(1, [Tree(3, [Tree(4)]), Tree(2, [Tree(2), Tree(3)])])))
+    [[1, 2, 3]]
+    >>> list(strips(Tree(1, [Tree(2), Tree(2, [Tree(2), Tree(3, [Tree(4)]), Tree(3)])])))
+    [[1, 2], [1, 2, 3, 4], [1, 2, 3]]
     '''
-    "*** YOUR CODE HERE ***"
-
+    if t.is_leaf():
+        yield _______
+    for b in t.branches:
+        if _______:
+            for s in _______:
+                yield _______
 """
 
 
